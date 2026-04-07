@@ -4,7 +4,7 @@ import threading
 import difflib
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk, ImageEnhance, ImageDraw
+from PIL import Image, ImageTk, ImageEnhance, ImageDraw, ImageFilter
 
 try:
     from tkinterdnd2 import TkinterDnD, DND_FILES
@@ -382,9 +382,28 @@ class App(TkinterDnD.Tk if HAS_DND else tk.Tk):
             self.after(0, lambda: self.progress.configure(value=0))
 
     def _preprocess(self, img):
+        # Skaluj w górę — poprawia OCR na niskiej rozdzielczości
+        scale = 2.5
+        new_size = (int(img.width * scale), int(img.height * scale))
+        img = img.resize(new_size, Image.LANCZOS)
+
+        # Skala szarości
         gray = img.convert("L")
-        enhanced = ImageEnhance.Contrast(gray).enhance(2.0)
-        return enhanced
+
+        # Odszumianie filtrem medianowym
+        gray = gray.filter(ImageFilter.MedianFilter(size=3))
+
+        # Wyostrzenie krawędzi
+        gray = gray.filter(ImageFilter.SHARPEN)
+        gray = gray.filter(ImageFilter.SHARPEN)
+
+        # Mocny kontrast
+        gray = ImageEnhance.Contrast(gray).enhance(3.0)
+
+        # Jasność — przyciemnia tło, wybija tekst
+        gray = ImageEnhance.Brightness(gray).enhance(1.2)
+
+        return gray
 
     def _ocr_image(self, img, label):
         processed = self._preprocess(img)
@@ -393,7 +412,7 @@ class App(TkinterDnD.Tk if HAS_DND else tk.Tk):
                 processed,
                 lang="pol+eng",
                 output_type=pytesseract.Output.DICT,
-                config="--psm 3"
+                config="--psm 3 --oem 1"
             )
         except pytesseract.TesseractNotFoundError:
             raise RuntimeError(
@@ -464,19 +483,35 @@ class App(TkinterDnD.Tk if HAS_DND else tk.Tk):
                 f"Gotowe. Znaleziono {diff_count} roznic."))
 
     def _extract_words(self, data):
+        scale = 2.5  # musi odpowiadać _preprocess
         words = []
         n = len(data["text"])
         for i in range(n):
             word = data["text"][i].strip()
             conf = int(data["conf"][i]) if str(data["conf"][i]).lstrip("-").isdigit() else -1
-            if word and conf > 30:
+            if word and conf > 20:
                 words.append({
                     "text": word,
-                    "x": data["left"][i],
-                    "y": data["top"][i],
-                    "w": data["width"][i],
-                    "h": data["height"][i],
+                    # przelicz bbox z powrotem na współrzędne oryginału
+                    "x": int(data["left"][i]   / scale),
+                    "y": int(data["top"][i]    / scale),
+                    "w": int(data["width"][i]  / scale),
+                    "h": int(data["height"][i] / scale),
+                    "_h_raw": data["height"][i],
                 })
+
+        if not words:
+            return words
+
+        # Skup się na największych czcionkach:
+        # oblicz próg = 30% wysokości najwyższego słowa
+        max_h = max(w["_h_raw"] for w in words)
+        threshold = max_h * 0.30
+        words = [w for w in words if w["_h_raw"] >= threshold]
+
+        for w in words:
+            del w["_h_raw"]
+
         return words
 
 
