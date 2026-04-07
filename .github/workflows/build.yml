@@ -20,18 +20,20 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pillow pytesseract tkinterdnd2 pyinstaller
+          pip install pillow pytesseract pyinstaller
 
-      - name: Download Tesseract installer
-        run: |
-          $url = "https://digi.bib.uni-mannheim.de/tesseract/tesseract-ocr-w64-setup-5.3.3.20231005.exe"
-          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\tesseract-setup.exe" -UseBasicParsing
-        shell: pwsh
+      - name: Install Tesseract via Chocolatey
+        run: choco install tesseract --no-progress -y
+        shell: cmd
 
-      - name: Install Tesseract to local folder
+      - name: Copy Tesseract to workspace
         run: |
-          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\tesseract"
-          Start-Process -FilePath "$env:TEMP\tesseract-setup.exe" -ArgumentList "/S /D=${{ github.workspace }}\tesseract" -Wait
+          $tessDir = "C:\Program Files\Tesseract-OCR"
+          if (!(Test-Path $tessDir)) {
+            $tessDir = "C:\ProgramData\chocolatey\lib\tesseract\tools"
+          }
+          Write-Host "Tesseract dir: $tessDir"
+          Copy-Item -Recurse -Force $tessDir "${{ github.workspace }}\tesseract"
         shell: pwsh
 
       - name: Download language data (pol + eng)
@@ -56,13 +58,8 @@ jobs:
         shell: pwsh
 
       - name: Build EXE with PyInstaller
-        run: |
-          pyinstaller --onefile --windowed `
-            --add-data "tesseract;tesseract" `
-            --add-data "tessdata;tessdata" `
-            --name ImageCompare `
-            image_compare.py
-        shell: pwsh
+        run: pyinstaller --onefile --windowed --name ImageCompare image_compare.py
+        shell: cmd
 
       - name: Assemble portable folder
         run: |
@@ -70,11 +67,12 @@ jobs:
           Copy-Item "dist\ImageCompare.exe" "dist\ImageCompare\"
           Copy-Item -Recurse -Force "tesseract" "dist\ImageCompare\tesseract"
           Copy-Item -Recurse -Force "tessdata"  "dist\ImageCompare\tessdata"
+          Write-Host "--- Portable folder contents ---"
+          Get-ChildItem "dist\ImageCompare" -Recurse | Select-Object FullName
         shell: pwsh
 
       - name: Create ZIP
-        run: |
-          Compress-Archive -Path "dist\ImageCompare" -DestinationPath "ImageCompare_portable.zip" -Force
+        run: Compress-Archive -Path "dist\ImageCompare\*" -DestinationPath "ImageCompare_portable.zip" -Force
         shell: pwsh
 
       - name: Upload artifact
