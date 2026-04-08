@@ -25,13 +25,16 @@ def get_base_path():
     return os.path.dirname(os.path.abspath(__file__))
 
 
-BG = "#F5F5F3"
-ACCENT = "#2D6A4F"
-BTN_BG = "#E8E8E6"
-BTN_FG = "#1A1A1A"
-FONT = ("Segoe UI", 10)
+BG       = "#1C1C1E"   # ciemne tło jak Claude Code
+PANEL_BG = "#2C2C2E"   # panele
+BTN_BG   = "#3A3A3C"   # przyciski
+BTN_FG   = "#F5F5F0"   # tekst jasny
+ACCENT   = "#D4845A"   # koralowy akcent Claude
+MUTED    = "#8E8E93"   # szary pomocniczy
+CANVAS_BG= "#141414"   # tło canvasu
+FONT      = ("Segoe UI", 10)
 FONT_BOLD = ("Segoe UI", 10, "bold")
-FONT_SMALL = ("Segoe UI", 9)
+FONT_SMALL= ("Segoe UI", 9)
 
 SUPPORTED_FORMATS = [
     ("Obrazy", "*.jpg *.jpeg *.png *.bmp *.tiff *.tif *.webp"),
@@ -46,7 +49,7 @@ SUPPORTED_FORMATS = [
 
 class ImagePanel(tk.Frame):
     def __init__(self, master, label, **kwargs):
-        super().__init__(master, bg=BG, **kwargs)
+        super().__init__(master, bg=PANEL_BG, **kwargs)
         self.label = label
         self.pil_image = None
         self.display_image = None
@@ -63,22 +66,23 @@ class ImagePanel(tk.Frame):
         self._build()
 
     def _build(self):
-        header = tk.Frame(self, bg=BG)
+        header = tk.Frame(self, bg=PANEL_BG)
         header.pack(fill=tk.X, padx=4, pady=(4, 0))
 
-        tk.Label(header, text=self.label, font=FONT_BOLD, bg=BG, fg=ACCENT).pack(side=tk.LEFT)
+        tk.Label(header, text=self.label, font=FONT_BOLD, bg=PANEL_BG, fg=ACCENT).pack(side=tk.LEFT)
         tk.Button(header, text="Otwórz", font=FONT_SMALL, bg=BTN_BG, fg=BTN_FG,
-                  relief=tk.FLAT, padx=8, command=self.open_file).pack(side=tk.RIGHT)
+                  relief=tk.FLAT, padx=8, command=self.open_file,
+                  activebackground=ACCENT, activeforeground=BTN_FG).pack(side=tk.RIGHT)
 
-        canvas_frame = tk.Frame(self, bg="#CCCCCA", bd=1, relief=tk.SUNKEN)
+        canvas_frame = tk.Frame(self, bg="#000000", bd=1, relief=tk.FLAT)
         canvas_frame.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
-        self.canvas = tk.Canvas(canvas_frame, bg="#DDDDD8", highlightthickness=0)
+        self.canvas = tk.Canvas(canvas_frame, bg=CANVAS_BG, highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
         self.info_var = tk.StringVar(value="Brak obrazu")
-        tk.Label(self, textvariable=self.info_var, font=FONT_SMALL, bg=BG,
-                 fg="#555555").pack(fill=tk.X, padx=4, pady=(0, 4))
+        tk.Label(self, textvariable=self.info_var, font=FONT_SMALL, bg=PANEL_BG,
+                 fg=MUTED).pack(fill=tk.X, padx=4, pady=(0, 4))
 
         self.canvas.bind("<ButtonPress-1>", self._on_drag_start)
         self.canvas.bind("<B1-Motion>", self._on_drag)
@@ -234,6 +238,14 @@ class App(TkinterDnD.Tk if HAS_DND else tk.Tk):
         self.title("ImageCompare - Porównywanie dokumentów")
         self.geometry("1280x800")
         self.configure(bg=BG)
+        try:
+            style = ttk.Style()
+            style.theme_use("clam")
+            style.configure("TScrollbar", background=BTN_BG, troughcolor=PANEL_BG,
+                            arrowcolor=MUTED, bordercolor=BG)
+            style.configure("TProgressbar", background=ACCENT, troughcolor=PANEL_BG)
+        except Exception:
+            pass
         self.minsize(900, 600)
 
         base = get_base_path()
@@ -250,28 +262,33 @@ class App(TkinterDnD.Tk if HAS_DND else tk.Tk):
         self._build_ui()
 
     def _build_ui(self):
-        toolbar = tk.Frame(self, bg=BTN_BG, pady=4)
+        toolbar = tk.Frame(self, bg=PANEL_BG, pady=5)
         toolbar.pack(fill=tk.X)
 
-        def tbtn(text, cmd, sep=False):
+        def tbtn(text, cmd, sep=False, highlight=False):
             if sep:
-                tk.Label(toolbar, text="|", bg=BTN_BG, fg="#AAAAAA").pack(side=tk.LEFT, padx=2)
-            b = tk.Button(toolbar, text=text, font=FONT_SMALL, bg=BTN_BG, fg=BTN_FG,
-                          relief=tk.FLAT, padx=10, pady=2, command=cmd,
-                          activebackground="#D0D0CE")
-            b.pack(side=tk.LEFT, padx=1)
+                tk.Label(toolbar, text="|", bg=PANEL_BG, fg=MUTED).pack(side=tk.LEFT, padx=4)
+            bg = ACCENT if highlight else BTN_BG
+            fg = "#FFFFFF" if highlight else BTN_FG
+            b = tk.Button(toolbar, text=text, font=FONT_SMALL, bg=bg, fg=fg,
+                          relief=tk.FLAT, padx=12, pady=3, command=cmd,
+                          activebackground=ACCENT, activeforeground="#FFFFFF",
+                          cursor="hand2")
+            b.pack(side=tk.LEFT, padx=2)
             return b
 
         tbtn("Zoom +", self.zoom_in)
         tbtn("Zoom -", self.zoom_out)
         tbtn("Dopasuj", self.fit_all)
         tbtn("Reset", self.reset_all, sep=True)
-        tbtn("PORÓWNAJ OCR", self.start_ocr, sep=True)
+        tbtn("PORÓWNAJ OCR", self.start_ocr, sep=True, highlight=True)
         tbtn("Wyczyść", self.clear_results)
 
         tk.Checkbutton(toolbar, text="Synchronizuj", variable=self.sync_var,
-                       bg=BTN_BG, font=FONT_SMALL, fg=BTN_FG,
-                       activebackground=BTN_BG).pack(side=tk.RIGHT, padx=10)
+                       bg=PANEL_BG, font=FONT_SMALL, fg=BTN_FG,
+                       selectcolor=BTN_BG,
+                       activebackground=PANEL_BG,
+                       activeforeground=ACCENT).pack(side=tk.RIGHT, padx=12)
 
         panels_frame = tk.Frame(self, bg=BG)
         panels_frame.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
@@ -279,7 +296,7 @@ class App(TkinterDnD.Tk if HAS_DND else tk.Tk):
         self.panel_a = ImagePanel(panels_frame, "Zdjęcie A  ·  Wzór")
         self.panel_a.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        tk.Frame(panels_frame, bg="#CCCCCA", width=2).pack(side=tk.LEFT, fill=tk.Y)
+        tk.Frame(panels_frame, bg=BTN_BG, width=2).pack(side=tk.LEFT, fill=tk.Y)
 
         self.panel_b = ImagePanel(panels_frame, "Zdjęcie B  ·  Porównywane")
         self.panel_b.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -293,36 +310,39 @@ class App(TkinterDnD.Tk if HAS_DND else tk.Tk):
         self.panel_b.on_pan_change = lambda ox, oy: self.panel_a.set_sync(
             self.panel_a.zoom, ox, oy)
 
-        bottom = tk.Frame(self, bg=BG, height=180)
+        bottom = tk.Frame(self, bg=PANEL_BG, height=180)
         bottom.pack(fill=tk.X, padx=4, pady=(0, 4))
         bottom.pack_propagate(False)
 
-        tk.Label(bottom, text="Lista różnic:", font=FONT_BOLD, bg=BG).pack(anchor=tk.W)
+        tk.Label(bottom, text="Lista różnic:", font=FONT_BOLD,
+                 bg=PANEL_BG, fg=ACCENT).pack(anchor=tk.W, padx=4, pady=(4, 0))
 
-        diff_frame = tk.Frame(bottom, bg=BG)
-        diff_frame.pack(fill=tk.BOTH, expand=True)
+        diff_frame = tk.Frame(bottom, bg=PANEL_BG)
+        diff_frame.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
-        self.diff_text = tk.Text(diff_frame, font=FONT_SMALL, bg="#FAFAF8", fg=BTN_FG,
+        self.diff_text = tk.Text(diff_frame, font=FONT_SMALL, bg="#1E1E20", fg=BTN_FG,
                                  relief=tk.FLAT, wrap=tk.WORD, height=8,
+                                 insertbackground=BTN_FG,
                                  state=tk.DISABLED)
         sb = ttk.Scrollbar(diff_frame, orient=tk.VERTICAL, command=self.diff_text.yview)
         self.diff_text.configure(yscrollcommand=sb.set)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         self.diff_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self.diff_text.tag_configure("red", foreground="#CC0000")
-        self.diff_text.tag_configure("green", foreground="#007700")
-        self.diff_text.tag_configure("gray", foreground="#777777")
+        self.diff_text.tag_configure("red",   foreground="#FF6B6B")
+        self.diff_text.tag_configure("green", foreground="#69DB7C")
+        self.diff_text.tag_configure("gray",  foreground=MUTED)
 
-        status_frame = tk.Frame(self, bg="#E0E0DE")
+        status_frame = tk.Frame(self, bg=BG)
         status_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
         self.status_var = tk.StringVar(value="Gotowy. Wczytaj obrazy i kliknij PORÓWNAJ OCR.")
         tk.Label(status_frame, textvariable=self.status_var, font=FONT_SMALL,
-                 bg="#E0E0DE", anchor=tk.W, padx=8).pack(side=tk.LEFT, fill=tk.X, expand=True)
+                 bg=BG, fg=MUTED, anchor=tk.W, padx=8).pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.progress = ttk.Progressbar(status_frame, length=200, mode="determinate")
-        self.progress.pack(side=tk.RIGHT, padx=8, pady=2)
+        self.progress = ttk.Progressbar(status_frame, length=200, mode="determinate",
+                                        style="TProgressbar")
+        self.progress.pack(side=tk.RIGHT, padx=8, pady=3)
 
     def zoom_in(self):
         self.panel_a.zoom_in()
