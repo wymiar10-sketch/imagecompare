@@ -1,0 +1,11 @@
+# Klucze API i dane poufne
+.env
+.env.local
+.env.backup
+
+# System Mac
+.DS_Store
+
+# Foldery z zależnościami
+node_modules/
+__pycache__/
